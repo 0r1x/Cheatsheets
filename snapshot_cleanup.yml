@@ -1,0 +1,35 @@
+---
+- hosts: localhost
+  gather_facts: true
+  become: false
+  tasks:
+
+
+    - name: Gather snapshots from vCenter
+      community.vmware.vmware_all_snapshots_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        datacenter: "{{ vcenter_datacenter }}"
+        validate_certs: false
+      register: snapshots_info
+
+    - name: Print snapshot details
+      debug:
+        msg: "Snapshot '{{ item.name }}' created on '{{ item.creation_time }}' for VM '{{ item.vm_name }}'"
+      loop: "{{ snapshots_info.vmware_all_snapshots_info }}"
+
+
+    - name: Delete old snapshots
+      community.vmware.vmware_guest_snapshot:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        datacenter: "{{ vcenter_datacenter }}"
+        validate_certs: false
+        name: "{{ item.vm_name }}"
+        state: absent
+        folder: "{{ item.folder }}"
+        snapshot_name: "{{ item.name }}"
+      loop: "{{ snapshots_info.vmware_all_snapshots_info }}"
+      when: (lookup('pipe', 'date -d ' + item.creation_time + ' +%s') | int) < ((ansible_date_time.epoch | int) - 259200)
