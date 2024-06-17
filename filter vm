@@ -1,0 +1,42 @@
+---
+- name: Exclude VMs in a folder and get snapshots of remaining VMs
+  hosts: localhost
+  gather_facts: no
+  vars:
+    vcenter_hostname: "your_vcenter_server"
+    vcenter_username: "your_vcenter_username"
+    vcenter_password: "your_vcenter_password"
+    datacenter_name: "your_datacenter"
+    excluded_folder: "folder_to_exclude"
+
+  tasks:
+    - name: Find all VMs in the datacenter
+      community.vmware.vmware_guest_find:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+      register: all_vms
+
+    - name: Filter VMs to exclude those in the specified folder
+      set_fact:
+        filtered_vms: "{{ all_vms.virtual_machines | rejectattr('folder', 'search', excluded_folder) | list }}"
+
+    - name: Extract UUIDs of the filtered VMs
+      set_fact:
+        vm_uuids: "{{ filtered_vms | map(attribute='uuid') | list }}"
+
+    - name: Get snapshots for remaining VMs using the filter option
+      community.vmware.vmware_get_all_snapshots:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+        filter: "{{ vm_uuids }}"
+      register: snapshot_results
+
+    - name: Print snapshot information
+      debug:
+        var: snapshot_results.results
